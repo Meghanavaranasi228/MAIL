@@ -1,0 +1,258 @@
+Here's a complete implementation of a Login and Signup System using PHP and MySQL, following secure coding practices
+
+
+---
+
+1. Create MySQL Database
+
+Run the following SQL query in your MySQL database to create a user_auth database and users table:
+
+CREATE DATABASE user_auth;
+USE user_auth;
+
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+---
+
+2. Database Connection (db.php)
+
+Create a file db.php to connect PHP to the MySQL database.
+
+<?php
+$host = "localhost";
+$user = "root"; // Change if necessary
+$pass = ""; // Change if necessary
+$dbname = "user_auth";
+
+$conn = new mysqli($host, $user, $pass, $dbname);
+
+// Check connection
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
+?>
+
+
+---
+
+3. Signup Page (signup.php)
+
+Create a signup page where users can register.
+
+<?php
+include "db.php";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username = trim($_POST["username"]);
+    $email = trim($_POST["email"]);
+    $password = $_POST["password"];
+    $confirm_password = $_POST["confirm_password"];
+    $errors = [];
+
+    // Validate inputs
+    if (empty($username) || empty($email) || empty($password) || empty($confirm_password)) {
+        $errors[] = "All fields are required.";
+    }
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = "Invalid email format.";
+    }
+    if ($password !== $confirm_password) {
+        $errors[] = "Passwords do not match.";
+    }
+    if (strlen($password) < 6) {
+        $errors[] = "Password must be at least 6 characters.";
+    }
+
+    // If no errors, proceed with registration
+    if (empty($errors)) {
+        $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+
+        $stmt = $conn->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+        $stmt->bind_param("sss", $username, $email, $hashed_password);
+
+        if ($stmt->execute()) {
+            header("Location: login.php?signup=success");
+            exit();
+        } else {
+            $errors[] = "Error: Could not register.";
+        }
+        $stmt->close();
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Signup</title>
+</head>
+<body>
+    <h2>Signup</h2>
+    <?php if (!empty($errors)) {
+        foreach ($errors as $error) {
+            echo "<p style='color:red;'>$error</p>";
+        }
+    } ?>
+    <form method="post">
+        <input type="text" name="username" placeholder="Username" required><br>
+        <input type="email" name="email" placeholder="Email" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <input type="password" name="confirm_password" placeholder="Confirm Password" required><br>
+        <button type="submit">Signup</button>
+    </form>
+    <p>Already have an account? <a href="login.php">Login</a></p>
+</body>
+</html>
+
+
+---
+
+4. Login Page (login.php)
+
+Create a login page where users can log in.
+
+<?php
+session_start();
+include "db.php";
+
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    $username_or_email = trim($_POST["username_or_email"]);
+    $password = $_POST["password"];
+    $errors = [];
+
+    // Validate input
+    if (empty($username_or_email) || empty($password)) {
+        $errors[] = "All fields are required.";
+    } else {
+        $stmt = $conn->prepare("SELECT id, username, password FROM users WHERE email = ? OR username = ?");
+        $stmt->bind_param("ss", $username_or_email, $username_or_email);
+        $stmt->execute();
+        $stmt->store_result();
+        $stmt->bind_result($id, $username, $hashed_password);
+        
+        if ($stmt->num_rows > 0) {
+            $stmt->fetch();
+            if (password_verify($password, $hashed_password)) {
+                $_SESSION["user_id"] = $id;
+                $_SESSION["username"] = $username;
+                header("Location: dashboard.php");
+                exit();
+            } else {
+                $errors[] = "Invalid credentials.";
+            }
+        } else {
+            $errors[] = "User not found.";
+        }
+        $stmt->close();
+    }
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h2>Login</h2>
+    <?php if (!empty($errors)) {
+        foreach ($errors as $error) {
+            echo "<p style='color:red;'>$error</p>";
+        }
+    } ?>
+    <form method="post">
+        <input type="text" name="username_or_email" placeholder="Username or Email" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <button type="submit">Login</button>
+    </form>
+    <p>Don't have an account? <a href="signup.php">Signup</a></p>
+</body>
+</html>
+
+
+---
+
+5. Protected Dashboard (dashboard.php)
+
+Create a protected page that only logged-in users can access.
+
+<?php
+session_start();
+if (!isset($_SESSION["user_id"])) {
+    header("Location: login.php");
+    exit();
+}
+?>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+    <h2>Welcome, <?php echo htmlspecialchars($_SESSION["username"]); ?>!</h2>
+    <p>This is your dashboard.</p>
+    <a href="logout.php">Logout</a>
+</body>
+</html>
+
+
+---
+
+6. Logout (logout.php)
+
+Create a logout page to destroy the session.
+
+<?php
+session_start();
+session_destroy();
+header("Location: login.php");
+exit();
+?>
+
+
+---
+
+Security Features Implemented
+
+✔ Password Hashing: Uses password_hash() for secure password storage.
+✔ SQL Injection Prevention: Uses prepared statements to prevent SQL injection.
+✔ Session Handling: Restricts access to the dashboard unless logged in.
+
+
+---
+
+How to Run the Project
+
+1. Set up the database:
+
+Import the SQL schema into your MySQL database.
+
+Update db.php with your database credentials.
+
+
+
+2. Run the application:
+
+Place the PHP files in your local server directory (e.g., htdocs for XAMPP).
+
+Start Apache and MySQL using XAMPP.
+
+Open signup.php in the browser to register.
+
+Log in using login.php and access dashboard.php.
+
+
+
+
+
+---
+
+This system provides a fully functional, secure authentication system using PHP and MySQL. You can expand it with email verification, password reset, and user roles. Let me know if you need further improvements!
